@@ -1,0 +1,12 @@
+[project]
+name = "facr-builder"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "dnspython>=2.8.0",
+    "dotenv>=0.9.9",
+    "openpyxl>=3.1.5",
+    "pyyaml>=6.0.3",
+]
