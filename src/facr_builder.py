@@ -2,10 +2,14 @@ import csv
 import os
 import socket
 from dataclasses import asdict, dataclass, fields
-from typing import Dict, List
+from enum import Enum
+from typing import Dict, List, Optional
 
+import click
 import yaml
 from dotenv import load_dotenv
+
+LOB = Enum("CONINFRA", "FUELS", "PAYMENTS")
 
 
 @dataclass
@@ -16,42 +20,79 @@ class Rule:
     source_lob: str
     destination_hostname: str
     destination_ip_address: str
-    destination_protocol_port: str
     destination_lob: str
+    destination_protocol_port: str
     add_modify_remove: str = "Add"
     temporary: str = "No"
 
 
-def main() -> None:
+@click.command()
+@click.option("--hosts", default="HOSTS", help="Path to a list of hosts.")
+@click.option(
+    "--lob",
+    type=click.Choice(["CONINFRA", "FUELS", "PAYMENTS"], case_sensitive=False),
+    default="FUELS",
+    show_default=True,
+    help="LOB for the hosts.",
+)
+@click.option(
+    "--output",
+    default="OUTPUT.csv",
+    show_default=True,
+    help="Path to the output CSV file.",
+)
+@click.argument("service_names", nargs=-1, type=str)
+def main(hosts, lob, output, service_names) -> None:
     load_dotenv()
 
-    hosts_filename = os.getenv("HOSTS")
-    if not hosts_filename:
-        print("Environment variable HOSTS is not set.")
-        return
+    if hosts == "HOSTS":
+        hosts_filename = os.getenv("HOSTS")
+        if not hosts_filename:
+            print("Environment variable HOSTS is not set.")
+            return -1
 
-    servers_filename = os.getenv("SERVERS")
-    if not servers_filename:
-        print("Environment variable SERVERS is not set.")
-        return
+    services_filename = os.getenv("SERVICES")
+    if not services_filename:
+        print("Environment variable SERVICES is not set.")
+        return -1
 
-    csv_filename = os.getenv("CSVOUT")
-    if not csv_filename:
-        print("Environment variable CSVOUT is not set.")
-        return
+    if output == "OUTPUT.csv":
+        csv_filename = os.getenv("CSVOUT")
+        if not csv_filename:
+            print("Environment variable CSVOUT is not set.")
+            return -1
 
     print("Loading hosts from", hosts_filename)
-    print("Loading servers from", servers_filename)
-    print("Writing FACR rules to", csv_filename)
+    print("Loading services from", services_filename)
 
-    server_list = load_servers(servers_filename)
-    host_list = load_hosts(hosts_filename)
-    rules = generate_rules(host_list, "FUELS", server_list, "CONINFRA")
-    write_rules_to_csv(rules, csv_filename)
+    services = load_services(services_filename)
+
+    if len(service_names) == 0:
+        print("No service name(s) provided.\n")
+        list_available_services(services)
+        return -1
+
+    hosts = load_hosts(hosts_filename)
+    hosts = [add_server_info(host) for host in hosts]
+    rules = []
+
+    for name in service_names:
+        service = get_service(name=name, services=services)
+
+        if service is None:
+            print("Skipping service", name)
+            continue
+
+        print(f"Generating rules to connect to {name}.")
+        rules.extend(generate_rules_for_service(hosts, lob, service))
+
+    if len(rules) > 0:
+        print(f"Writing {len(rules)} rules to {csv_filename}.")
+        write_rules_to_csv(rules, csv_filename)
 
 
 def load_hosts(filename: str) -> List[Dict[str, str]]:
-    hosts_list = []
+    host_list = []
 
     with open(filename, "r") as file:
         hosts = [line.strip() for line in file if line.strip()]
@@ -59,25 +100,38 @@ def load_hosts(filename: str) -> List[Dict[str, str]]:
     for hostname in hosts:
         host = {}
         host["hostname"] = hostname
-        hosts_list.append(host)
+        host_list.append(host)
 
-    return [add_server_info(host) for host in hosts_list]
+    return host_list
 
 
-def load_servers(yaml_file: str) -> dict[str, any]:
+def load_services(yaml_file: str) -> Dict[str, any]:
     with open(yaml_file, "r") as file:
-        servers = yaml.safe_load(file)
+        services = yaml.safe_load(file)
 
-    return [add_server_info(server) for server in servers]
+    return services
+
+
+def list_available_services(services: Dict[str, any]) -> None:
+    print("Available services:")
+    [print("  -", service_name) for service_name in services.keys()]
+
+
+def get_service(name: str, services: Dict[str, any]) -> Optional[Dict[str, any]]:
+    if name.lower() in services.keys():
+        return services.get(name.lower(), None)
+    else:
+        print(f"Service '{name}' not found in services list.")
+        return None
 
 
 def add_server_info(server: dict[str, any]) -> dict[str, any]:
     server["ip_address"] = get_ip_address(server["hostname"])
-    server["hostname"] = get_fqdn(server["ip_address"])
+    server["hostname"] = get_fqdn(server["hostname"])
     return server
 
 
-def get_ip_address(hostname: str) -> str | None:
+def get_ip_address(hostname: str) -> Optional[str]:
     try:
         ip_address = socket.gethostbyname(hostname)
     except socket.error:
@@ -90,42 +144,62 @@ def get_ip_address(hostname: str) -> str | None:
     return ip_address
 
 
-def get_fqdn(ip):
+def get_fqdn(host_or_ip):
     try:
-        fqdn = socket.getfqdn(ip)
+        fqdn = socket.getfqdn(host_or_ip)
     except socket.error:
         fqdn = None
 
     if fqdn is None:
-        print(f"Could not resolve fqdn for ip: {ip}")
+        print(f"Could not resolve fqdn for host or ip: {host_or_ip}")
         return None
 
     return fqdn
 
 
+def generate_rules_for_service(hosts, lob, service) -> List[Rule]:
+    if service.get("bi-directional", False):
+        print("Bi-directional communication enabled between hosts and services.")
+
+    if service.get("incoming") is not None:
+        service["incoming"] = [
+            add_server_info(server) for server in service.get("incoming", [])
+        ]
+    if service.get("outgoing") is not None:
+        service["outgoing"] = [
+            add_server_info(server) for server in service.get("outgoing", [])
+        ]
+
+    rules = generate_rules(hosts, lob, service, service.get("lob", "CONINFRA"))
+    return rules
+
+
 def generate_rules(
-    host_list: List[Dict[str, str]],
+    hosts: List[Dict[str, str]],
     host_lob: str,
-    server_list: List[Dict[str, str]],
-    server_lob: str = "CONINFRA",
+    service: Dict[str, str],
+    service_lob: str = "CONINFRA",
 ) -> List[Rule]:
     rules = []
 
-    for host in host_list:
-        for server in server_list:
+    for host in hosts:
+        for server in service["incoming"]:
             rule = Rule(
                 source_hostname=host["hostname"],
                 source_ip_address=host["ip_address"],
                 source_lob=host_lob,
                 destination_hostname=server["hostname"],
                 destination_ip_address=server["ip_address"],
-                destination_lob=server_lob,
-                destination_protocol_port=server["incoming_protocol_port"],
+                destination_lob=service_lob,
+                destination_protocol_port=server["protocol_port"],
             )
             rules.append(rule)
 
-    for server in server_list:
-        for host in host_list:
+    if not service.get("bi-directional", False):
+        return rules
+
+    for server in service["outgoing"]:
+        for host in hosts:
             rule = Rule(
                 source_hostname=server["hostname"],
                 source_ip_address=server["ip_address"],
@@ -133,7 +207,7 @@ def generate_rules(
                 destination_hostname=host["hostname"],
                 destination_ip_address=host["ip_address"],
                 destination_lob=host_lob,
-                destination_protocol_port=server["outgoing_protocol_port"],
+                destination_protocol_port=server["protocol_port"],
             )
             rules.append(rule)
 

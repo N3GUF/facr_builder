@@ -1,0 +1,48 @@
+control-m prod:
+  bi-directional: true
+  lob: CONINFRA
+  incoming:
+    - hostname: usatlssctmapp1
+      protocol_port: tcp 17705 / 17006
+    - hostname: usatlssctmapp2
+      protocol_port: tcp 17705 / 17006
+  outgoing:
+    - hostname: usatlssctmapp1
+      protocol_port: tcp 17006
+    - hostname: usatlssctmapp2
+      protocol_port: tcp 17006
+control-m uat:
+  bi-directional: true
+  lob: CONINFRA
+  incoming:
+    - hostname: usatlssctmapq1
+      protocol_port: tcp 17705 / 17006
+    - hostname: usatlssctmapq2
+      protocol_port: tcp 17705 / 17006
+  outgoing:
+    - hostname: usatlssctmapq1
+      protocol_port: tcp 17006
+    - hostname: usatlssctmapq2
+      protocol_port: tcp 17006      
+sfg prod:
+  bi-directional: true
+  lob: CONINFRA
+  incoming:
+    - hostname: transfer
+      protocol_port: sftp 50022
+  outgoing:
+    - hostname: us-ash-ss-sfg-ap-p-n-001
+      protocol_port: sftp 22
+    - hostname: us-ash-ss-sfg-ap-p-n-002
+      protocol_port: sftp 22
+sfg cert:
+  bi-directional: true
+  lob: CONINFRA
+  incoming:
+    - hostname: cert.transfer
+      protocol_port: sftp 50022
+  outgoing:
+    - hostname: us-ash-ss-sfg-ap-c-n-01
+      protocol_port: sftp 22
+    - hostname: us-ash-ss-sfg-ap-c-n-02
+      protocol_port: sftp 22
