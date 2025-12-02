@@ -1,4 +1,4 @@
-control-m prod:
+control-m_prod:
   bi-directional: true
   lob: CONINFRA
   incoming:
@@ -11,7 +11,7 @@ control-m prod:
       protocol_port: tcp 17006
     - hostname: usatlssctmapp2
       protocol_port: tcp 17006
-control-m uat:
+control-m_uat:
   bi-directional: true
   lob: CONINFRA
   incoming:
@@ -24,7 +24,7 @@ control-m uat:
       protocol_port: tcp 17006
     - hostname: usatlssctmapq2
       protocol_port: tcp 17006      
-sfg prod:
+sfg_prod:
   bi-directional: true
   lob: CONINFRA
   incoming:
@@ -35,7 +35,7 @@ sfg prod:
       protocol_port: sftp 22
     - hostname: us-ash-ss-sfg-ap-p-n-002
       protocol_port: sftp 22
-sfg cert:
+sfg_cert:
   bi-directional: true
   lob: CONINFRA
   incoming:

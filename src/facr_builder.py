@@ -2,14 +2,10 @@ import csv
 import os
 import socket
 from dataclasses import asdict, dataclass, fields
-from enum import Enum
 from typing import Dict, List, Optional
 
 import click
 import yaml
-from dotenv import load_dotenv
-
-LOB = Enum("CONINFRA", "FUELS", "PAYMENTS")
 
 
 @dataclass
@@ -43,13 +39,13 @@ class Rule:
 )
 @click.argument("service_names", nargs=-1, type=str)
 def main(hosts, lob, output, service_names) -> None:
-    load_dotenv()
-
     if hosts == "HOSTS":
         hosts_filename = os.getenv("HOSTS")
         if not hosts_filename:
             print("Environment variable HOSTS is not set.")
             return -1
+    else:
+        hosts_filename = os.getenv("HOSTS")
 
     services_filename = os.getenv("SERVICES")
     if not services_filename:
@@ -61,6 +57,8 @@ def main(hosts, lob, output, service_names) -> None:
         if not csv_filename:
             print("Environment variable CSVOUT is not set.")
             return -1
+    else:
+        csv_filename = os.getenv("CSVOUT")
 
     print("Loading hosts from", hosts_filename)
     print("Loading services from", services_filename)
