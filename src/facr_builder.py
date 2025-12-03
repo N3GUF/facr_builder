@@ -1,8 +1,10 @@
 import csv
-import os
 import socket
 from dataclasses import asdict, dataclass, fields
-from typing import Dict, List, Optional
+from os import getenv
+from pathlib import Path
+from sys import exit
+from typing import Dict, List, Optional, Tuple
 
 import click
 import yaml
@@ -23,7 +25,7 @@ class Rule:
 
 
 @click.command()
-@click.option("--hosts", default="HOSTS", help="Path to a list of hosts.")
+@click.option("--input", default="./input.txt", help="Path to a list of hosts.")
 @click.option(
     "--lob",
     type=click.Choice(["CONINFRA", "FUELS", "PAYMENTS"], case_sensitive=False),
@@ -33,44 +35,14 @@ class Rule:
 )
 @click.option(
     "--output",
-    default="OUTPUT.csv",
+    default="./output.csv",
     show_default=True,
     help="Path to the output CSV file.",
 )
 @click.argument("service_names", nargs=-1, type=str)
-def main(hosts, lob, output, service_names) -> None:
-    if hosts == "HOSTS":
-        hosts_filename = os.getenv("HOSTS")
-        if not hosts_filename:
-            print("Environment variable HOSTS is not set.")
-            return -1
-    else:
-        hosts_filename = os.getenv("HOSTS")
-
-    services_filename = os.getenv("SERVICES")
-    if not services_filename:
-        print("Environment variable SERVICES is not set.")
-        return -1
-
-    if output == "OUTPUT.csv":
-        csv_filename = os.getenv("CSVOUT")
-        if not csv_filename:
-            print("Environment variable CSVOUT is not set.")
-            return -1
-    else:
-        csv_filename = os.getenv("CSVOUT")
-
-    print("Loading hosts from", hosts_filename)
-    print("Loading services from", services_filename)
-
-    services = load_services(services_filename)
-
-    if len(service_names) == 0:
-        print("No service name(s) provided.\n")
-        list_available_services(services)
-        return -1
-
-    hosts = load_hosts(hosts_filename)
+def main(input, lob, output, service_names) -> None:
+    input, output, services = validate(input, output, service_names)
+    hosts = load_hosts(input)
     hosts = [add_server_info(host) for host in hosts]
     rules = []
 
@@ -85,8 +57,42 @@ def main(hosts, lob, output, service_names) -> None:
         rules.extend(generate_rules_for_service(hosts, lob, service))
 
     if len(rules) > 0:
-        print(f"Writing {len(rules)} rules to {csv_filename}.")
-        write_rules_to_csv(rules, csv_filename)
+        print(f"\nWriting {len(rules)} rules to {output.resolve()}.")
+        write_rules_to_csv(rules, output)
+
+
+def validate(
+    input: str, output: str, service_names: List[str]
+) -> Tuple[Path, Path, List[dict[str, str]]]:
+    input = Path(input)
+    output = Path(output)
+
+    if not input.exists():
+        print(f"input file: {input.resolve()} does not exist.")
+        exit(-1)
+
+    services_filename = getenv("SERVICES")
+
+    if services_filename is None:
+        print("Environment variable SERVICES is not set.")
+        exit(-1)
+    else:
+        services_filename = Path(services_filename)
+
+    if not services_filename.exists():
+        print(f"Services file: {services_filename.resolve()} does not exist.")
+        exit(-1)
+
+    print(f"Loading hosts from {input.resolve()}")
+    print(f"Loading services from {services_filename.resolve()}\n")
+    services = load_services(services_filename)
+
+    if len(service_names) == 0:
+        print("No service name(s) provided.\n")
+        list_available_services(services)
+        exit(-1)
+
+    return input, output, services
 
 
 def load_hosts(filename: str) -> List[Dict[str, str]]:
@@ -125,7 +131,13 @@ def get_service(name: str, services: Dict[str, any]) -> Optional[Dict[str, any]]
 
 def add_server_info(server: dict[str, any]) -> dict[str, any]:
     server["ip_address"] = get_ip_address(server["hostname"])
-    server["hostname"] = get_fqdn(server["hostname"])
+    fqdn = get_fqdn(server["ip_address"])
+
+    if fqdn == server["ip_address"]:
+        return server
+    else:
+        server["hostname"] = fqdn
+
     return server
 
 
