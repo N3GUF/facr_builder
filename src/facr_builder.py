@@ -28,7 +28,7 @@ class Rule:
 @click.option("--input", default="./input.txt", help="Path to a list of hosts.")
 @click.option(
     "--lob",
-    type=click.Choice(["CONINFRA", "FUELS", "PAYMENTS"], case_sensitive=False),
+    type=click.Choice(["CONINFRA", "FUELS", "LODGING", "PAYMENTS"], case_sensitive=False),
     default="FUELS",
     show_default=True,
     help="LOB for the hosts.",

@@ -3,9 +3,9 @@ control-m_prod:
   lob: CONINFRA
   incoming:
     - hostname: usatlssctmapp1
-      protocol_port: tcp 17705 / 17006
+      protocol_port: tcp 17005 / 17006
     - hostname: usatlssctmapp2
-      protocol_port: tcp 17705 / 17006
+      protocol_port: tcp 17005 / 17006
   outgoing:
     - hostname: usatlssctmapp1
       protocol_port: tcp 17006
@@ -16,9 +16,9 @@ control-m_uat:
   lob: CONINFRA
   incoming:
     - hostname: usatlssctmapq1
-      protocol_port: tcp 17705 / 17006
+      protocol_port: tcp 17005 / 17006
     - hostname: usatlssctmapq2
-      protocol_port: tcp 17705 / 17006
+      protocol_port: tcp 17005 / 17006
   outgoing:
     - hostname: usatlssctmapq1
       protocol_port: tcp 17006
